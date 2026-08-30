@@ -1,0 +1,10 @@
+# Personal Google Takeout exports must never be committed.
+takeout-*
+Takeout/
+watch-history.json
+*.tgz
+*.tar.gz
+
+# Local operating-system files
+Thumbs.db
+.DS_Store

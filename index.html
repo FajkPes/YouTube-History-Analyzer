@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube History Parser</title>
+<style>
+  :root {
+    --bg:#0f0f11;--bg2:#17171a;--bg3:#1e1e23;
+    --border:#2a2a32;--border2:#3a3a46;
+    --text:#e8e8f0;--text2:#9999b4;--text3:#666680;
+    --accent:#7b6ef6;--accent2:#a89ef8;
+    --cyan:#2dd4bf;--cyan2:#5eead4;
+    --yellow:#f0c040;--green:#4ade80;--red:#f87171;--orange:#fb923c;
+    --shorts:#ff4444;--shorts2:#ff7777;
+    --music:#a855f7;--music2:#c084fc;
+    --radius:12px;--radius-sm:7px;
+    --sidebar-w:310px;
+    --fs-base:15px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;font-size:var(--fs-base);min-height:100vh;display:flex;flex-direction:column}
+
+  /* ── header ── */
+  header{padding:1.4rem 2rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+  header h1{font-size:1.1rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  header h1 span{color:var(--accent2)}
+  .header-sub{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+  .header-badge{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 13px}
+
+  /* ── layout ── */
+  .main{display:grid;grid-template-columns:var(--sidebar-w) 1fr;flex:1;min-height:0;height:calc(100vh - 65px)}
+  .sidebar{border-right:1px solid var(--border);padding:1.5rem;display:flex;flex-direction:column;gap:1.1rem;overflow-y:auto;position:relative;min-width:230px;max-width:560px}
+  .resize-handle{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize;z-index:10;background:transparent;transition:background .15s}
+  .resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
+  .sidebar-label{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.35rem}
+  .content{padding:2rem;overflow-y:auto}
+
+  /* ── drop zone ── */
+  .drop-zone{border:1.5px dashed var(--border2);border-radius:var(--radius);padding:2rem 1rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg2);position:relative}
+  .drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:rgba(123,110,246,.07)}
+  .drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .drop-icon{font-size:1.8rem;margin-bottom:.5rem;display:block;color:var(--text3)}
+  .drop-title{font-size:.9rem;font-weight:600;color:var(--text2);margin-bottom:.25rem}
+  .drop-hint{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--text3)}
+
+  /* ── status ── */
+  .status-bar{font-family:'DM Mono',monospace;font-size:.72rem;padding:.55rem .85rem;border-radius:var(--radius-sm);background:var(--bg3);border:1px solid var(--border);color:var(--text3);min-height:34px;display:flex;align-items:center;gap:.4rem;word-break:break-all}
+  .status-bar.ok{border-color:var(--green);color:var(--green)}
+  .status-bar.err{border-color:var(--red);color:var(--red)}
+
+  /* ── sidebar info box ── */
+  .meta-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text2);line-height:2.1}
+  .meta-box .mv{color:var(--text);font-weight:500}
+  .meta-box .mh{color:var(--accent2)}
+
+  /* ── clear btn ── */
+  .clear-btn-side{width:100%;padding:.6rem;background:transparent;border:1px solid var(--border);border-radius:var(--radius);color:var(--text3);font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.05em;cursor:pointer;transition:border-color .15s,color .15s}
+  .clear-btn-side:hover{border-color:var(--red);color:var(--red)}
+
+  /* ── section labels ── */
+  .section-label{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);padding-bottom:.45rem;margin:2rem 0 1rem;display:flex;align-items:center;gap:.6rem}
+  .section-label .sl-badge{font-size:.63rem;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 7px;letter-spacing:.04em}
+
+  /* ── stat cards ── */
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:.5rem}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+  .stat-card.c-purple::before{background:var(--accent)}
+  .stat-card.c-cyan::before{background:var(--cyan)}
+  .stat-card.c-yellow::before{background:var(--yellow)}
+  .stat-card.c-green::before{background:var(--green)}
+  .stat-card.c-orange::before{background:var(--orange)}
+  .stat-card.c-red::before{background:var(--red)}
+  .stat-card.c-shorts::before{background:var(--shorts)}
+  .stat-card.c-music::before{background:var(--music)}
+  .stat-label{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.45rem}
+  .stat-value{font-size:1.65rem;font-weight:700;color:var(--text);line-height:1}
+  .stat-sub{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text2);margin-top:.4rem}
+
+  /* ── shorts/normal split bar ── */
+  .split-bar-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem;margin-bottom:.5rem}
+  .split-row{display:flex;align-items:center;gap:.8rem;margin-bottom:.6rem}
+  .split-row:last-child{margin-bottom:0}
+  .split-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .split-dot.s-normal{background:var(--accent)}
+  .split-dot.s-shorts{background:var(--shorts)}
+  .split-dot.s-music{background:var(--music)}
+  .split-name{font-size:.85rem;font-weight:600;flex:1}
+  .split-count{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--text2)}
+  .split-pct{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text3);min-width:40px;text-align:right}
+  .split-track{flex:2;background:var(--bg3);border-radius:4px;height:8px;overflow:hidden}
+  .split-fill{height:100%;border-radius:4px;transition:width .5s ease}
+  .split-fill.s-normal{background:var(--accent)}
+  .split-fill.s-shorts{background:var(--shorts)}
+  .split-fill.s-music{background:var(--music)}
+
+  /* ── heatmap ── */
+  .heatmap-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem}
+  .heatmap-title{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--text3);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.07em}
+  .heatmap{display:grid;grid-template-columns:repeat(24,1fr);gap:4px}
+  .heatmap-cell{border-radius:4px;aspect-ratio:1;cursor:default;position:relative}
+  .heatmap-cell:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;font-family:'DM Mono',monospace;font-size:.68rem;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);padding:4px 9px;border-radius:5px;pointer-events:none;z-index:20}
+  .heatmap-labels{display:grid;grid-template-columns:repeat(24,1fr);gap:4px;margin-top:5px}
+  .heatmap-labels span{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--text3);text-align:center}
+  .heatmap-legend{display:flex;align-items:center;gap:.5rem;margin-top:.7rem;justify-content:flex-end}
+  .heatmap-legend span{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--text3)}
+  .heatmap-legend-grad{display:flex;gap:2px}
+  .heatmap-legend-grad div{width:14px;height:8px;border-radius:2px}
+
+  /* ── weekday bars ── */
+  .weekday-bars{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .wd-col{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .wd-bar-wrap{width:100%;background:var(--bg3);border-radius:5px;height:90px;display:flex;align-items:flex-end;overflow:hidden}
+  .wd-bar{width:100%;background:linear-gradient(180deg,var(--accent2) 0%,var(--accent) 100%);border-radius:5px 5px 0 0;transition:height .45s ease;min-height:3px}
+  .wd-label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3)}
+  .wd-count{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--text2)}
+
+  /* ── month timeline ── */
+  .month-row{display:grid;grid-template-columns:90px 1fr 58px;align-items:center;gap:.9rem;padding:3px 0}
+  .month-name{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text3)}
+  .month-track{background:var(--bg3);border-radius:4px;height:9px;overflow:hidden}
+  .month-fill{background:var(--accent);height:100%;border-radius:4px;transition:width .5s ease}
+  .month-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--text2);text-align:right}
+
+  /* ── table ── */
+  .table-controls{display:flex;align-items:center;gap:.8rem;margin-bottom:.85rem;flex-wrap:wrap}
+  .table-controls label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3)}
+  .table-controls select{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-family:'DM Mono',monospace;font-size:.74rem;padding:4px 9px;outline:none;cursor:pointer}
+  .table-controls select:focus{border-color:var(--accent)}
+  .tc-sep{width:1px;height:18px;background:var(--border)}
+  .table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  thead tr{border-bottom:1px solid var(--border2);background:var(--bg2)}
+  thead th{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);text-align:left;padding:.65rem .85rem;white-space:nowrap;font-weight:400}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:hover{background:rgba(123,110,246,.04)}
+  tbody td{padding:.65rem .85rem;color:var(--text2);vertical-align:middle;font-size:.85rem}
+  tbody td.td-main{color:var(--text);font-weight:500}
+  .rank-cell{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3);width:36px;padding-left:1rem!important}
+  .bar-cell{width:130px}
+  .bar-wrap{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .4s ease}
+  .bar-fill.c-cyan{background:var(--cyan)}
+  .bar-fill.c-yellow{background:var(--yellow)}
+  .bar-fill.c-green{background:var(--green)}
+  .bar-fill.c-orange{background:var(--orange)}
+  .bar-fill.c-shorts{background:var(--shorts)}
+
+  /* badges */
+  .badge{font-family:'DM Mono',monospace;font-size:.72rem;border-radius:5px;padding:2px 8px;display:inline-block;white-space:nowrap}
+  .badge-purple{color:var(--accent2);background:rgba(123,110,246,.12)}
+  .badge-cyan{color:var(--cyan2);background:rgba(45,212,191,.1)}
+  .badge-shorts{color:var(--shorts2);background:rgba(255,68,68,.1)}
+  .badge-music{color:var(--music2);background:rgba(168,85,247,.12)}
+  .badge-gray{color:var(--text2);background:var(--bg3)}
+
+  /* empty */
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:70vh;gap:1.1rem;color:var(--text3);text-align:center}
+  .empty-icon{font-size:3rem}
+  .empty-title{font-size:1.2rem;font-weight:700;color:var(--text2)}
+  .empty-hint{font-family:'DM Mono',monospace;font-size:.78rem;line-height:2;color:var(--text3)}
+  .empty-hint strong{color:var(--accent2)}
+
+  /* ── unrecognized panel ── */
+  .unrecog-toggle{width:100%;padding:.6rem;background:transparent;border:1px solid var(--border);border-radius:var(--radius);color:var(--text3);font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.05em;cursor:pointer;transition:border-color .15s,color .15s;display:flex;align-items:center;justify-content:space-between}
+  .unrecog-toggle:hover{border-color:var(--yellow);color:var(--yellow)}
+  .unrecog-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:none}
+  .unrecog-panel.open{display:block}
+  .unrecog-list{max-height:220px;overflow-y:auto;padding:.5rem}
+  .unrecog-item{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3);border-bottom:1px solid var(--border);padding:.4rem .3rem;word-break:break-all;line-height:1.6}
+  .unrecog-item:last-child{border-bottom:none}
+  .unrecog-item .ui-reason{color:var(--yellow);font-size:.62rem;display:block;margin-bottom:2px}
+  .unrecog-item .ui-title{color:var(--text2);font-size:.68rem}
+  .unrecog-count{font-family:'DM Mono',monospace;font-size:.68rem;background:rgba(240,192,64,.1);color:var(--yellow);border-radius:5px;padding:1px 7px}
+
+  /* ── time estimator ── */
+  .time-est-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem}
+  .time-est-row{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+  .time-est-row label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3);white-space:nowrap}
+  .time-est-input{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Mono',monospace;font-size:.8rem;padding:4px 9px;width:72px;outline:none;text-align:center}
+  .time-est-input:focus{border-color:var(--accent)}
+  .time-est-sep{color:var(--text3);font-family:'DM Mono',monospace;font-size:.75rem}
+  .time-est-results{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:.5rem}
+  .time-est-card{background:var(--bg3);border-radius:var(--radius-sm);padding:.65rem .85rem}
+  .time-est-card .tec-label{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+  .time-est-card .tec-val{font-size:1.1rem;font-weight:700;color:var(--text)}
+  .time-est-card .tec-sub{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text2);margin-top:2px}
+  .time-est-note{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--text3);margin-top:.5rem;line-height:1.6}
+  .time-est-toggles{display:flex;gap:.7rem;margin:.4rem 0 .6rem;flex-wrap:wrap}
+  .tet-label{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--text2);display:flex;align-items:center;gap:.3rem;cursor:pointer;user-select:none}
+  .tet-label input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+
+  /* ── pagination ── */
+  .pg-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-family:'DM Mono',monospace;font-size:.7rem;padding:3px 9px;cursor:pointer;transition:border-color .15s,color .15s;white-space:nowrap}
+  .pg-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent2)}
+  .pg-btn:disabled{opacity:.35;cursor:default}
+  .pg-btn.active{border-color:var(--accent);color:var(--accent2);background:rgba(123,110,246,.1)}
+  .pg-info{color:var(--text3);font-size:.7rem;font-family:'DM Mono',monospace;padding:0 .2rem}
+
+  /* ── settings button ── */
+  .settings-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 13px;cursor:pointer;transition:border-color .15s,color .15s;letter-spacing:.04em}
+  .settings-btn:hover{border-color:var(--accent);color:var(--accent2)}
+
+  /* ── settings modal ── */
+  .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:none;align-items:center;justify-content:center;padding:1.5rem}
+  .settings-overlay.open{display:flex}
+  .settings-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);width:100%;max-width:720px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+  .settings-header{padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-shrink:0}
+  .settings-title{font-size:1rem;font-weight:700;letter-spacing:.05em}
+  .settings-sub{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--text3);margin-top:3px}
+  .settings-close{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-size:.85rem;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,color .15s}
+  .settings-close:hover{border-color:var(--red);color:var(--red)}
+  .settings-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 1rem;flex-shrink:0;overflow-x:auto}
+  .stab{background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);font-family:'DM Mono',monospace;font-size:.72rem;padding:.65rem .9rem;cursor:pointer;transition:color .15s,border-color .15s;white-space:nowrap;letter-spacing:.03em;margin-bottom:-1px}
+  .stab:hover{color:var(--text2)}
+  .stab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+  .settings-sub-label{font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:.35rem;font-weight:500}
+  .settings-body{flex:1;overflow:hidden;position:relative}
+  .stab-panel{display:none;flex-direction:column;height:100%;padding:1rem 1.4rem;gap:.7rem}
+  .stab-panel.active{display:flex}
+  .settings-panel-hint{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3);line-height:1.7;flex-shrink:0}
+  .settings-panel-hint strong{color:var(--text2)}
+  .settings-panel-hint code{color:var(--accent2);background:var(--bg3);padding:1px 5px;border-radius:3px}
+  .settings-ta{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;padding:.75rem;resize:none;outline:none;line-height:1.9;min-height:260px}
+  .settings-ta:focus{border-color:var(--accent)}
+  .settings-footer{padding:.85rem 1.4rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;flex-shrink:0}
+  .sf-btn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.45rem .9rem;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border2);transition:border-color .15s,color .15s,background .15s;letter-spacing:.04em}
+  .sf-import,.sf-export{background:var(--bg3);color:var(--text2)}.sf-import:hover,.sf-export:hover{border-color:var(--cyan);color:var(--cyan2)}
+  .sf-reset{background:var(--bg3);color:var(--text3)}.sf-reset:hover{border-color:var(--yellow);color:var(--yellow)}
+  .sf-cancel{background:var(--bg3);color:var(--text3)}.sf-cancel:hover{border-color:var(--border2);color:var(--text2)}
+  .sf-save{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}.sf-save:hover{background:var(--accent2);border-color:var(--accent2)}
+
+  @media(max-width:760px){
+    .main{grid-template-columns:1fr;height:auto}
+    .sidebar{border-right:none;border-bottom:1px solid var(--border)}
+    .content{padding:1.25rem}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>YouTube History <span>Analyzer</span></h1>
+    <div class="header-sub">Analýza sledovací historie · watch-history.json</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:.7rem">
+    <button class="settings-btn" id="btn-language" type="button">CS</button>
+    <button class="settings-btn" id="settingsBtn" onclick="openSettings()">⚙ Nastavení detekce</button>
+    <div class="header-badge" id="headerBadge">Žádná data</div>
+  </div>
+</header>
+
+<!-- Settings Modal -->
+<div id="settingsOverlay" class="settings-overlay" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-modal">
+    <div class="settings-header">
+      <div>
+        <div class="settings-title">⚙ Nastavení detekce</div>
+        <div class="settings-sub">Pravidla pro klasifikaci videí — změny se projeví po novém načtení souboru</div>
+      </div>
+      <button class="settings-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-tabs">
+      <button class="stab active" onclick="switchTab('shorts')" id="stab-shorts">📺 Shorts</button>
+      <button class="stab" onclick="switchTab('music')" id="stab-music">🎵 Hudba</button>
+    </div>
+    <div class="settings-body">
+      <!-- SHORTS TAB -->
+      <div class="stab-panel active" id="panel-shorts" style="overflow-y:auto;gap:0">
+        <div style="flex-shrink:0;padding-bottom:.7rem;border-bottom:1px solid var(--border);margin-bottom:.8rem">
+          <div class="settings-sub-label">📺 Shorts kanály</div>
+          <div class="settings-panel-hint" style="margin-bottom:.45rem">Kanály jejichž videa jsou <strong>vždy označena jako Shorts</strong> bez ohledu na URL nebo název. Jedno jméno na řádek, přesná shoda (bez ohledu na velikost písmen).</div>
+          <textarea class="settings-ta" id="ta-shorts-ch" spellcheck="false" style="min-height:180px;flex:none;height:180px"></textarea>
+        </div>
+        <div style="flex-shrink:0;margin-top:.6rem">
+          <div class="settings-sub-label">🏷 Automatická detekce</div>
+          <div class="settings-panel-hint" style="margin-bottom:.7rem">Videa detekovaná <strong>pouze podle hashtagu #shorts v názvu</strong> (nikoli přes URL <code>/shorts/</code> ani kanálový seznam) jsou méně spolehlivá — může jít o normální videa s tímto tagem. Toto nastavení je překlasifikuje zpět na videa.</div>
+          <label class="tet-label" style="gap:.55rem;cursor:pointer;user-select:none;display:flex;align-items:center">
+            <input type="checkbox" id="cfg-ignore-hashtag-shorts" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer">
+            <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text2)">Překlasifikovat <em>#shorts hashtagová</em> videa zpět na normální / hudbu</span>
+          </label>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3);margin-top:.4rem;line-height:1.7">
+            Výchozí: <strong style="color:var(--accent2)">zapnuto</strong>. Videa detekovaná pouze přes <code>#shorts</code> v titulku budou hodnocena jako normální nebo hudba.
+          </div>
+        </div>
+      </div>
+      <!-- MUSIC TAB — three sub-sections in one scrollable panel -->
+      <div class="stab-panel" id="panel-music" style="overflow-y:auto;gap:0">
+        <div style="flex-shrink:0;padding-bottom:.5rem;border-bottom:1px solid var(--border);margin-bottom:.6rem">
+          <div class="settings-sub-label">🎵 Hudební kanály</div>
+          <div class="settings-panel-hint" style="margin-bottom:.45rem">Kanály jejichž videa jsou <strong>vždy označena jako Hudba</strong>. Jedno jméno na řádek, přesná shoda.</div>
+          <textarea class="settings-ta" id="ta-music-ch" spellcheck="false" style="min-height:120px;flex:none;height:120px"></textarea>
+        </div>
+        <div style="flex-shrink:0;padding-bottom:.5rem;border-bottom:1px solid var(--border);margin-bottom:.6rem;margin-top:.6rem">
+          <div class="settings-sub-label">🎤 Interpreti</div>
+          <div class="settings-panel-hint" style="margin-bottom:.45rem">Jména interpretů hledaná v <strong>názvu videa i kanálu</strong>. Jedno jméno na řádek. Podporuje regex (př. <code>fat[ ]?rat</code>).</div>
+          <textarea class="settings-ta" id="ta-music-artists" spellcheck="false" style="min-height:160px;flex:none;height:160px"></textarea>
+        </div>
+        <div style="flex-shrink:0;margin-top:.6rem">
+          <div class="settings-sub-label">🔑 Klíčová slova</div>
+          <div class="settings-panel-hint" style="margin-bottom:.45rem">Klíčová slova hledaná v <strong>názvu videa i kanálu</strong>. Jedno slovo/fráze na řádek. Jakákoliv shoda → hudba.</div>
+          <textarea class="settings-ta" id="ta-music-kw" spellcheck="false" style="min-height:120px;flex:none;height:120px"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="settings-footer">
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <button class="sf-btn sf-import" onclick="importConfig()">📂 Importovat config</button>
+        <button class="sf-btn sf-export" onclick="exportConfig()">💾 Exportovat config</button>
+        <button class="sf-btn sf-reset" onclick="resetConfig()">↺ Výchozí</button>
+        <input type="file" id="configFileInput" accept=".json" style="display:none" onchange="loadConfigFile(event)">
+      </div>
+      <div style="display:flex;gap:.6rem">
+        <button class="sf-btn sf-cancel" onclick="closeSettings()">Zrušit</button>
+        <button class="sf-btn sf-save" onclick="saveSettings()">✓ Uložit &amp; Znovu načíst</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <aside class="sidebar" id="sidebar">
+    <div class="resize-handle" id="resizeHandle"></div>
+
+    <div>
+      <div class="sidebar-label">Import souboru</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".json">
+        <span class="drop-icon">▲</span>
+        <div class="drop-title">Přetáhni watch-history.json</div>
+        <div class="drop-hint">nebo klikni pro výběr souboru</div>
+      </div>
+    </div>
+
+    <div class="status-bar" id="statusBar">Čeká na soubor…</div>
+
+    <div id="sidebarMeta" style="display:none">
+      <div class="sidebar-label">Souhrn</div>
+      <div class="meta-box" id="metaBox"></div>
+    </div>
+
+    <button class="clear-btn-side" id="clearBtn" style="display:none">✕ Vymazat data</button>
+
+    <div id="sidebarUnrecog" style="display:none">
+      <button class="unrecog-toggle" id="unrecogToggle" onclick="toggleUnrecog()">
+        <span>⚠ Nerozpoznané záznamy <span class="unrecog-count" id="unrecogCount">0</span></span>
+        <span id="unrecogArrow">▼</span>
+      </button>
+      <div class="unrecog-panel" id="unrecogPanel">
+        <div class="unrecog-list" id="unrecogList"></div>
+      </div>
+    </div>
+
+    <div id="sidebarTimeEst" style="display:none">
+      <div class="sidebar-label">Odhad času sledování</div>
+      <div class="time-est-box">
+        <div class="time-est-row">
+          <label>Videa — min:</label>
+          <input class="time-est-input" id="timeMin" type="number" min="0" max="600" value="2" oninput="recalcTime()">
+          <span class="time-est-sep">min</span>
+        </div>
+        <div class="time-est-row">
+          <label>Videa — max:</label>
+          <input class="time-est-input" id="timeMax" type="number" min="0" max="600" value="12" oninput="recalcTime()">
+          <span class="time-est-sep">min</span>
+        </div>
+        <div class="time-est-row">
+          <label>Hudba (průměr):</label>
+          <input class="time-est-input" id="timeMusic" type="number" min="0" max="60" value="3.5" step="0.5" oninput="recalcTime()">
+          <span class="time-est-sep">min</span>
+        </div>
+        <div class="time-est-row">
+          <label>Shorts (průměr):</label>
+          <input class="time-est-input" id="timeShorts" type="number" min="0" max="10" value="0.5" step="0.1" oninput="recalcTime()">
+          <span class="time-est-sep">min</span>
+        </div>
+        <div class="time-est-toggles">
+          <label class="tet-label"><input type="checkbox" id="togVideos" checked onchange="recalcTime()"> Videa</label>
+          <label class="tet-label"><input type="checkbox" id="togMusic" checked onchange="recalcTime()"> Hudba</label>
+          <label class="tet-label"><input type="checkbox" id="togShorts" checked onchange="recalcTime()"> Shorts</label>
+        </div>
+        <div style="margin-bottom:.5rem">
+          <label class="tet-label" style="opacity:.75" title="Přeskočí zhlédnutí stejného videa, pokud byla sledována méně než 2 minuty od sebe (pouze normální videa)">
+            <input type="checkbox" id="togDedup" onchange="recalcTime()"> Deduplikovat videa <span style="color:var(--text3);font-size:.65rem">(výchozí: vypnuto)</span>
+          </label>
+        </div>
+        <div class="time-est-results" id="timeEstResults"></div>
+        <div class="time-est-note" id="timeEstNote"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content" id="mainContent">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">▶</div>
+      <div class="empty-title">Nahraj svou historii</div>
+      <div class="empty-hint">
+        YouTube → Nastavení → Data Google<br>
+        → Stáhnout data → Vybrat YouTube<br>
+        → Soubor <strong>watch-history.json</strong>
+      </div>
+    </div>
+
+    <div id="results" style="display:none">
+
+      <!-- Přehled -->
+      <div class="section-label">Přehled sledování</div>
+      <div class="stat-grid" id="statGrid"></div>
+
+      <!-- Shorts vs normální -->
+      <div class="section-label">Shorts vs. normální videa</div>
+      <div class="split-bar-wrap" id="splitBar"></div>
+
+      <!-- Heatmapa hodin -->
+      <div class="section-label">Aktivita podle hodiny dne</div>
+      <div class="heatmap-wrap">
+        <div class="heatmap" id="heatmap"></div>
+        <div class="heatmap-labels" id="heatmapLabels"></div>
+        <div class="heatmap-legend" id="heatmapLegend"></div>
+      </div>
+
+      <!-- Dny v týdnu -->
+      <div class="section-label">Aktivita podle dne v týdnu</div>
+      <div class="weekday-bars" id="weekdayBars"></div>
+
+      <!-- Měsíce -->
+      <div class="section-label">Sledování po měsících</div>
+      <div id="monthTimeline"></div>
+
+      <!-- Top kanály -->
+      <div class="section-label">Top kanály <span class="sl-badge" id="totalChannelsBadge"></span></div>
+      <div class="table-controls">
+        <label>Zobrazit:</label>
+        <select id="limitChannels" onchange="rerenderChannels()">
+          <option value="10">10</option><option value="25">25</option><option value="50">50</option>
+          <option value="100">100</option><option value="200">200</option><option value="9999">Vše</option>
+        </select>
+        <div class="tc-sep"></div>
+        <label>Seřadit:</label>
+        <select id="sortChannels" onchange="rerenderChannels()">
+          <option value="count">Počet videí ↓</option>
+          <option value="alpha">A–Z</option>
+        </select>
+        <div class="tc-sep"></div>
+        <label>Typ:</label>
+        <select id="filterChannelType" onchange="rerenderChannels()">
+          <option value="all">Vše</option>
+          <option value="normal">Jen normální</option>
+          <option value="shorts">Jen Shorts</option>
+          <option value="music">Jen hudba</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="rank-cell">#</th>
+            <th>Kanál</th>
+            <th>Celkem</th>
+            <th>Normální</th>
+            <th>Shorts</th>
+            <th>Hudba</th>
+            <th class="bar-cell">Podíl</th>
+          </tr></thead>
+          <tbody id="channelBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Nejsledovanější videa -->
+      <div class="section-label">Nejsledovanější videa (opakování)</div>
+      <div class="table-controls">
+        <label>Zobrazit:</label>
+        <select id="limitVideos" onchange="videoPage=1;rerenderVideos()">
+          <option value="10">10</option><option value="25">25</option><option value="50">50</option>
+          <option value="100">100</option><option value="200">200</option>
+          <option value="500">500</option><option value="1000">1000</option>
+        </select>
+        <div class="tc-sep"></div>
+        <label>Typ:</label>
+        <select id="filterVideoType" onchange="videoPage=1;rerenderVideos()">
+          <option value="all">Vše</option>
+          <option value="normal">Jen normální</option>
+          <option value="shorts">Jen Shorts</option>
+          <option value="music">Jen hudba</option>
+        </select>
+        <div class="tc-sep"></div>
+        <div id="videoPagination" style="display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--text3)"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="rank-cell">#</th>
+            <th>Typ</th>
+            <th>Název videa</th>
+            <th>Kanál</th>
+            <th>Zhlédnutí</th>
+            <th class="bar-cell">Podíl</th>
+          </tr></thead>
+          <tbody id="videoBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Nejaktivnější dny -->
+      <div class="section-label">Nejaktivnější dny</div>
+      <div class="table-controls">
+        <label>Zobrazit:</label>
+        <select id="limitDays" onchange="rerenderDays()">
+          <option value="10">10</option><option value="25">25</option><option value="50">50</option>
+          <option value="100">100</option><option value="200">200</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="rank-cell">#</th>
+            <th>Datum</th>
+            <th>Den</th>
+            <th>Videí</th>
+            <th>Shorts</th>
+            <th>Top kanál toho dne</th>
+            <th class="bar-cell">Aktivita</th>
+          </tr></thead>
+          <tbody id="daysBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Hodiny — detailní tabulka -->
+      <div class="section-label">Nejaktivnější hodiny</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Hodina</th>
+            <th>Celkem</th>
+            <th>Normální</th>
+            <th>Shorts</th>
+            <th>Hudba</th>
+            <th class="bar-cell">Aktivita</th>
+          </tr></thead>
+          <tbody id="hoursBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Série -->
+      <div class="section-label">Série sledování (streak)</div>
+      <div class="stat-grid" id="streakGrid"></div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+let G = null;
+let _lastFileText = null;
+
+// ── CONFIG — editable detection lists ─────────────────────────────────────────
+const DEFAULT_CONFIG = {
+  ignoreHashtagShorts: true,
+  shortsChannels: [
+    'CarterPCs',
+    "Zach's Tech Turf",
+    'camman18',
+    'Prism',
+    'DrDonut Clips',
+    'vt.physics',
+  ],
+  musicChannels: [
+    'vevo','NCS','NoCopyrightSounds','Argofox','Monstercat',
+    'Epidemic Sound','Lofi Girl','Chillhop Music',
+    'Mr. Suicide Sheep','Majestic Casual','Trap Nation','Bass Nation',
+    'Proximity','Musicbed','Artlist','Spinnin Records','Ultra Music',
+    'Armada Music','Revealed Recordings','Enhanced Music','Anjunabeats',
+    'Hospital Records','Liquicity','Drum & Bass Arena','Soulection',
+    'thissongissick','Audio Library','Firefly Music','Chill Nation',
+    'Ambient Worlds','No Copyright Sounds','Nightcore Reality',
+  ],
+  musicArtists: [
+    'OMFG','Mr. Kitty','Stein27','TheFatRat','Fat Rat','Slushii','Alex Fain',
+    'Colbreakz','Ahrix','Latinhype','Powfu','Malena','Vengaboys',
+    'MDK','Exyl','Modern Talking','Goblins from Mars',
+    'Lil Nas X','Taylor Swift','Ariana Grande','Billie Eilish','Olivia Rodrigo',
+    'Doja Cat','Dua Lipa','The Weeknd','Post Malone','Harry Styles','Ed Sheeran',
+    'Adele','Beyonce','Rihanna','Lady Gaga','Katy Perry','Selena Gomez',
+    'Miley Cyrus','Charlie Puth','Shawn Mendes','Camila Cabello','Sam Smith',
+    'Lizzo','Megan Thee Stallion','Cardi B','Nicki Minaj','Ava Max',
+    'Tate McRae','Rita Ora','Anne-Marie','Bebe Rexha','Zara Larsson',
+    'Sabrina Carpenter','Gracie Abrams','Chappell Roan','Lorde','Lana Del Rey',
+    'Melanie Martinez','Halsey','Aurora','Drake','Kendrick Lamar','Travis Scott',
+    'Kanye','Eminem','Joyner Lucas','Juice WRLD','XXXTentacion','Lil Peep',
+    'Machine Gun Kelly','Lil Baby','Lil Durk','Lil Uzi Vert','Polo G',
+    'NBA YoungBoy','Rod Wave','Gunna','21 Savage','ASAP Rocky','Wiz Khalifa',
+    'Mac Miller','Kid Cudi','Tyler the Creator','Chance the Rapper',
+    'Childish Gambino','Central Cee','Headie One','Stormzy','Slowthai','Little Simz',
+    'Alan Walker','Avicii','Martin Garrix','Chainsmokers','Illenium','ODESZA',
+    'Skrillex','Diplo','Calvin Harris','David Guetta','Marshmello','Deadmau5',
+    'Daft Punk','Porter Robinson','Aphex Twin','Boards of Canada','Four Tet',
+    'Gesaffelstein','Cashmere Cat','Louis the Child','Petit Biscuit','Lost Sky',
+    'Elektronomia','Jim Yosef','Syn Cole','Different Heaven','Noisestorm',
+    'Cash Cash','Pegboard Nerds','Rob Gasser','Ship Wrek','Approaching Nirvana',
+    'Aero Chord','Hyper Potions','Lakey Inspired','Unknown Brain','Alex Skrindo',
+    'Phantom Sage','Rameses B','Haiku Hands','Yung Bae',
+    'BLACKPINK','Stray Kids','Tomorrow X Together','LE SSERAFIM','Red Velvet',
+    'G-IDLE','Imagine Dragons','Twenty One Pilots','Panic at the Disco',
+    'Fall Out Boy','My Chemical Romance','Green Day','Linkin Park',
+    'Bring Me the Horizon','Arctic Monkeys','The 1975','Tame Impala',
+    'Glass Animals','Bon Iver','Phoebe Bridgers','The National','Foo Fighters',
+    'Pearl Jam','Frank Ocean','Daniel Caesar','Brent Faiyaz','Summer Walker',
+    'Jhene Aiko','Ari Lennox','Snoh Aalegra','Lucky Daye','Bryson Tiller',
+    'PARTYNEXTDOOR','Kygo','Zedd','Tiesto','Flume','Rezz','Moderat','Kavinsky',
+    'Gryffin','San Holo','Lauv','Blackbear',
+    'Tobu','Janji','Razihel','Lensko','Vexento','Disfigure','Ikson',
+    'Poylow','Wiguez','Futuristik','Distrion','Laszlo','Feint',
+    'BTS','TWICE','aespa','ATEEZ','SEVENTEEN','ITZY','NewJeans','ENHYPEN',
+    'EXO','SHINee','MAMAMOO','IVE','Kep1er',
+    'MGK','Future','Offset','Quavo','Takeoff','Migos','Dave','Aitch',
+    'Sia','Mabel','Banks','Marina','Hozier','Florence','Radiohead',
+    'Coldplay','Nirvana','Giveon','Kehlani','VEVO',
+  ],
+  musicKeywords: [
+    'music','audio','sound','nocopyright','no copyright','no-copyright',
+    'royalty free','royalty-free','epidemic sound','argofox','monstercat',
+    'ncs','musicbed','artlist','spinnin','armada','revealed','enhanced',
+    'anjuna','liquicity','soulection','proximity','thissongissick',
+    'audiolibrary','lofi','lo-fi','lo fi','chillhop','chill mix','phonk',
+    'synthwave','ambient','edm','dubstep','house','trance','drill','trap',
+    'hip-hop','hip hop','rnb','r&b','glitch hop','nightcore',
+    'dnb','drum & bass','future bass','electro','techno','garage','grime',
+    'afrobeats','reggaeton','dancehall','latinhype',
+    'official music video','official audio','official mv','lyric video',
+    'music video','visualizer','visualiser','animated video','official clip',
+    'lyrics','instrumental','ost','soundtrack','beats','type beat',
+    'prod. by','prod by','remix','cover','mashup','flip','bootleg','mixtape',
+    'album','single','release','vevo','playlist',
+    'feat.','ft.','topic','free download',
+  ],
+};
+
+let CFG = loadConfig();
+
+function loadConfig() {
+  try {
+    const stored = localStorage.getItem('ytparser_config');
+    if (stored) {
+      const p = JSON.parse(stored);
+      // back-compat: ensure new keys exist
+      if (p.ignoreHashtagShorts === undefined) p.ignoreHashtagShorts = true;
+      return p;
+    }
+  } catch(_) {}
+  return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+}
+
+function saveConfig(cfg) {
+  try { localStorage.setItem('ytparser_config', JSON.stringify(cfg)); } catch(_) {}
+  CFG = cfg;
+}
+
+let _shortsChannelsSet = null, _musicChannelsSet = null;
+let _musicArtistsRE = null, _musicKeywordsRE = null;
+
+function compileConfig() {
+  _shortsChannelsSet = new Set(CFG.shortsChannels.map(s => s.trim().toLowerCase()).filter(Boolean));
+  _musicChannelsSet  = new Set(CFG.musicChannels.map(s => s.trim().toLowerCase()).filter(Boolean));
+
+  function toRePart(s) {
+    return s.replace(/[-[\]{}()*+?.,\\^$|#]/g, c => c === ' ' ? '[ ]?' : '\\' + c);
+  }
+  const artistParts = CFG.musicArtists.map(s => s.trim()).filter(Boolean).map(toRePart);
+  _musicArtistsRE = artistParts.length
+    ? new RegExp('(?:^|[\\s\\-\\u2013\\u2014|(\\[\\]])(?:' + artistParts.join('|') + ')(?:[\\s\\-\\u2013\\u2014,|(\\[\\]]|$)', 'i')
+    : null;
+
+  const kwParts = CFG.musicKeywords.map(s => s.trim()).filter(Boolean).map(toRePart);
+  _musicKeywordsRE = kwParts.length ? new RegExp(kwParts.join('|'), 'i') : null;
+}
+compileConfig();
+
+// ── detect shorts ──────────────────────────────────────────────────────────────
+// Returns: 'hard' (URL/channel — always Short), 'hashtag' (only #tag in title), or false
+function isShortDetailed(title, url, chName) {
+  if (chName && _shortsChannelsSet && _shortsChannelsSet.has(chName.toLowerCase())) return 'hard';
+  if (url && url.includes('/shorts/')) return 'hard';
+  if (url && (url.includes('#shorts') || url.includes('?shorts'))) return 'hard';
+  if (title && /#shorts?\b/i.test(title)) return 'hashtag';
+  if (title && /(?:\s#\w+)+\s*$/.test(title)) return 'hashtag';
+  return false;
+}
+
+function isShort(title, url, chName) {
+  const det = isShortDetailed(title, url, chName);
+  if (det === 'hard') return true;
+  // hashtag-only: respect config toggle (default: treat as NOT a short)
+  if (det === 'hashtag') return CFG.ignoreHashtagShorts === false;
+  return false;
+}
+
+// ── detect music ──────────────────────────────────────────────────────────────
+const MUSIC_STANDALONE_RE = /(?:^|[\s\[(|\u2013-])(?:feat|ft)\.?\s+\w|official\s+(?:music\s+)?(?:video|audio|mv)|music\s+video|vevo|live\s+(?:at|from|session)/i;
+
+function isMusic(title, chName) {
+  if (!title && !chName) return false;
+  const chLow = chName ? chName.toLowerCase() : '';
+  if (_musicChannelsSet && _musicChannelsSet.has(chLow)) return true;
+  if (chName && _musicArtistsRE && _musicArtistsRE.test(' ' + chName + ' ')) return true;
+  if (chName && /[-\u2013]\s*Topic$/i.test(chName)) return true;
+  if (chName && /VEVO$/i.test(chName)) return true;
+  if (title && MUSIC_STANDALONE_RE.test(title)) return true;
+  if (title && _musicArtistsRE && _musicArtistsRE.test(' ' + title + ' ')) return true;
+  if (title && _musicKeywordsRE && _musicKeywordsRE.test(title)) return true;
+  if (chName && _musicKeywordsRE && _musicKeywordsRE.test(chName)) return true;
+  return false;
+}
+
+// ── settings modal ────────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('ta-shorts-ch').value     = CFG.shortsChannels.join('\n');
+  document.getElementById('ta-music-ch').value      = CFG.musicChannels.join('\n');
+  document.getElementById('ta-music-artists').value = CFG.musicArtists.join('\n');
+  document.getElementById('ta-music-kw').value      = CFG.musicKeywords.join('\n');
+  // Reset to first tab
+  switchTab('shorts');
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('stab-' + id).classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+function taToList(id) {
+  return document.getElementById(id).value.split('\n').map(s => s.trim()).filter(Boolean);
+}
+
+function saveSettings() {
+  const newCfg = {
+    ignoreHashtagShorts: document.getElementById('cfg-ignore-hashtag-shorts').checked,
+    shortsChannels: taToList('ta-shorts-ch'),
+    musicChannels:  taToList('ta-music-ch'),
+    musicArtists:   taToList('ta-music-artists'),
+    musicKeywords:  taToList('ta-music-kw'),
+  };
+  saveConfig(newCfg);
+  compileConfig();
+  closeSettings();
+  if (G && _lastFileText) {
+    const g = parseData(_lastFileText);
+    if (!g.error) render(g);
+  }
+}
+
+function resetConfig() {
+  if (!confirm('Obnovit výchozí nastavení?')) return;
+  saveConfig(JSON.parse(JSON.stringify(DEFAULT_CONFIG)));
+  compileConfig();
+  document.getElementById('ta-shorts-ch').value          = CFG.shortsChannels.join('\n');
+  document.getElementById('ta-music-ch').value           = CFG.musicChannels.join('\n');
+  document.getElementById('ta-music-artists').value      = CFG.musicArtists.join('\n');
+  document.getElementById('ta-music-kw').value           = CFG.musicKeywords.join('\n');
+  document.getElementById('cfg-ignore-hashtag-shorts').checked = CFG.ignoreHashtagShorts !== false;
+}
+
+function exportConfig() {
+  const blob = new Blob([JSON.stringify(CFG, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ytparser-config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importConfig() {
+  document.getElementById('configFileInput').click();
+}
+
+function loadConfigFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.shortsChannels && !parsed.musicChannels && !parsed.musicArtists && !parsed.musicKeywords) {
+        alert('Neplatný config soubor.'); return;
+      }
+      const merged = {
+        ignoreHashtagShorts: parsed.ignoreHashtagShorts !== false,
+        shortsChannels: parsed.shortsChannels || [],
+        musicChannels:  parsed.musicChannels  || [],
+        musicArtists:   parsed.musicArtists   || [],
+        musicKeywords:  parsed.musicKeywords  || [],
+      };
+      saveConfig(merged);
+      compileConfig();
+      document.getElementById('ta-shorts-ch').value          = CFG.shortsChannels.join('\n');
+      document.getElementById('ta-music-ch').value           = CFG.musicChannels.join('\n');
+      document.getElementById('ta-music-artists').value      = CFG.musicArtists.join('\n');
+      document.getElementById('ta-music-kw').value           = CFG.musicKeywords.join('\n');
+      document.getElementById('cfg-ignore-hashtag-shorts').checked = CFG.ignoreHashtagShorts !== false;
+    } catch(_) { alert('Chyba čtení JSON.'); }
+    ev.target.value = '';
+  };
+  r.readAsText(file, 'utf-8');
+}
+
+// ── parse ──────────────────────────────────────────────────────────────────────
+function parseData(text) {
+  let data;
+  try { data = JSON.parse(text); } catch(_) {
+    try { data = JSON.parse('[' + text.replace(/^\[/,'').replace(/,?\s*\]?\s*$/,'') + ']'); } catch(e) {
+      return { error: 'Chyba JSON: ' + e.message };
+    }
+  }
+  if (!Array.isArray(data)) return { error: 'JSON není pole záznamů.' };
+
+  let total = 0;
+  let totalShorts = 0, totalNormal = 0, totalMusic = 0;
+  // For dedup: track last watch time per URL (only for normal videos)
+  const lastWatchTime = {}; // url -> Date
+  let totalNormalDedup = 0; // normal videos counted with dedup
+
+  // per-channel: total, normal, shorts, music
+  const byChannel = {}, byChannelN = {}, byChannelS = {}, byChannelM = {};
+  // per-video
+  const byVideo = {}, videoMeta = {};
+  // time buckets
+  const byHour = new Array(24).fill(0), byHourN = new Array(24).fill(0), byHourS = new Array(24).fill(0), byHourM = new Array(24).fill(0);
+  const byWeekday = new Array(7).fill(0);
+  const byDay = {}, byDayShorts = {}, byDayChannel = {}; // byDayChannel[day][channel] = count
+  const byMonth = {};
+  const dates = [];
+  let firstEntry = null;
+  const unrecognized = [];
+
+  data.forEach(d => {
+    // skip posts, community tab entries, and anything without a watch URL
+    const url = d.titleUrl || '';
+    if (!url.includes('/watch?v=') && !url.includes('/shorts/')) {
+      unrecognized.push({ reason: 'Není URL videa', title: d.title || '', url });
+      return;
+    }
+    if (!d.subtitles?.[0]?.name) {
+      unrecognized.push({ reason: 'Chybí subtitles/kanál', title: d.title || '', url });
+      return;
+    }
+
+    const chName = d.subtitles[0].name;
+    const rawTitle = d.title || '';
+    const vTitle = rawTitle.replace(/^Zhlédli jste video\s*/i,'').replace(/^Watched\s*/i,'');
+    const short  = isShort(vTitle, url, chName);
+    const music  = !short && isMusic(vTitle, chName);
+    total++;
+
+    // channel counts — short / music / normal are mutually exclusive
+    byChannel[chName]  = (byChannel[chName]  || 0) + 1;
+    if (short)       { byChannelS[chName] = (byChannelS[chName] || 0) + 1; totalShorts++; }
+    else if (music)  { byChannelM[chName] = (byChannelM[chName] || 0) + 1; totalMusic++;  }
+    else             {
+      byChannelN[chName] = (byChannelN[chName] || 0) + 1; totalNormal++;
+      // dedup: count only if >2 min gap from last watch of same URL
+      if (url && d.time) {
+        const dt2 = new Date(d.time);
+        if (!isNaN(dt2)) {
+          const last = lastWatchTime[url];
+          const gapMin = last ? Math.abs(dt2 - last) / 60000 : Infinity;
+          if (!last || gapMin > 2) {
+            totalNormalDedup++;
+          }
+          lastWatchTime[url] = dt2;
+        }
+      } else {
+        totalNormalDedup++; // no time info, count it
+      }
+    }
+
+    // video
+    if (url) {
+      byVideo[url] = (byVideo[url] || 0) + 1;
+      if (!videoMeta[url]) videoMeta[url] = { title: vTitle, channel: chName, short, music };
+    }
+
+    // time
+    if (d.time) {
+      const dt = new Date(d.time);
+      if (!isNaN(dt)) {
+        dates.push(dt);
+        if (!firstEntry || dt < firstEntry.dt) firstEntry = { dt, title: vTitle, channel: chName };
+        const h = dt.getHours();
+        byHour[h]++;
+        if (short)      byHourS[h]++;
+        else if (music) byHourM[h]++;
+        else            byHourN[h]++;
+        byWeekday[dt.getDay()]++;
+        const dayKey = dt.toISOString().slice(0,10);
+        byDay[dayKey] = (byDay[dayKey] || 0) + 1;
+        if (short) byDayShorts[dayKey] = (byDayShorts[dayKey] || 0) + 1;
+        if (!byDayChannel[dayKey]) byDayChannel[dayKey] = {};
+        byDayChannel[dayKey][chName] = (byDayChannel[dayKey][chName] || 0) + 1;
+        const mKey = dt.toISOString().slice(0,7);
+        byMonth[mKey] = (byMonth[mKey] || 0) + 1;
+      }
+    }
+  });
+
+  // streaks
+  const daysSorted = Object.keys(byDay).sort();
+  let maxStreak = 0, curStreak = 0, curStart = '', bestStart = '', bestEnd = '';
+  daysSorted.forEach((d, i) => {
+    if (i === 0) { curStreak = 1; curStart = d; }
+    else {
+      const prev = new Date(daysSorted[i-1]); prev.setDate(prev.getDate()+1);
+      if (prev.toISOString().slice(0,10) === d) { curStreak++; }
+      else { curStreak = 1; curStart = d; }
+    }
+    if (curStreak > maxStreak) { maxStreak = curStreak; bestStart = curStart; bestEnd = d; }
+  });
+
+  const oldest  = dates.length ? new Date(Math.min(...dates)) : null;
+  const newest  = dates.length ? new Date(Math.max(...dates)) : null;
+  const spanDays = oldest && newest ? Math.round((newest - oldest) / 86400000) + 1 : 0;
+  const avgPerDay = spanDays > 0 ? total / spanDays : 0;
+  const uniqueVideos   = Object.keys(byVideo).length;
+  const uniqueChannels = Object.keys(byChannel).length;
+
+  return {
+    total, totalShorts, totalNormal, totalMusic,
+    totalNormalDedup,
+    uniqueVideos, uniqueChannels, spanDays, oldest, newest, avgPerDay,
+    byChannel, byChannelN, byChannelS, byChannelM,
+    byVideo, videoMeta,
+    byHour, byHourN, byHourS, byHourM,
+    byWeekday, byDay, byDayShorts, byDayChannel, byMonth,
+    maxStreak, bestStart, bestEnd, daysSorted,
+    firstEntry, unrecognized
+  };
+}
+
+// ── format helpers ─────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  const locale = document.documentElement.lang === 'cs' ? 'cs-CZ' : 'en-US';
+  return d.toLocaleDateString(locale,{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function fmtNum(n) {
+  const locale = document.documentElement.lang === 'cs' ? 'cs-CZ' : 'en-US';
+  return Math.round(n).toLocaleString(locale);
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function trunc(s, n) { return s.length > n ? s.slice(0,n) + '…' : s; }
+const WD_NAMES  = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+const WD_SHORT  = ['Ne','Po','Út','St','Čt','Pá','So'];
+const MONTHS_CS = ['Led','Únr','Bře','Dub','Kvě','Čvn','Čvc','Srp','Zář','Říj','Lis','Pro'];
+
+// ── render ─────────────────────────────────────────────────────────────────────
+function render(g) {
+  G = g;
+  document.getElementById('headerBadge').textContent = fmtNum(g.total) + ' záznamů';
+
+  // sidebar meta
+  const peakH = g.byHour.indexOf(Math.max(...g.byHour));
+  document.getElementById('metaBox').innerHTML = `
+    <div>Od: <span class="mv">${fmtDate(g.oldest)}</span></div>
+    <div>Do: <span class="mv">${fmtDate(g.newest)}</span></div>
+    <div>Rozsah: <span class="mh">${fmtNum(g.spanDays)} dní</span></div>
+    <div>Průměr/den: <span class="mh">${g.avgPerDay.toFixed(1)}</span></div>
+    <div>Shorts: <span class="mv">${Math.round(g.totalShorts/g.total*100)} %</span></div>
+    <div>Hudba: <span class="mv">${Math.round(g.totalMusic/g.total*100)} %</span></div>
+    <div>Nejaktivnější h: <span class="mv">${peakH}:00–${peakH+1}:00</span></div>
+  `;
+  document.getElementById('sidebarMeta').style.display = '';
+  document.getElementById('clearBtn').style.display = '';
+
+  // stat cards
+  const sg = document.getElementById('statGrid');
+  sg.innerHTML = '';
+  [
+    { label:'Celkem sledováno', value: fmtNum(g.total),           sub:'všechna videa',           cls:'c-purple' },
+    { label:'Normální videa',   value: fmtNum(g.totalNormal),     sub: Math.round(g.totalNormal/g.total*100) + ' % z celku', cls:'c-cyan' },
+    { label:'Shorts',           value: fmtNum(g.totalShorts),     sub: Math.round(g.totalShorts/g.total*100) + ' % z celku', cls:'c-shorts' },
+    { label:'Hudba / Ambient',  value: fmtNum(g.totalMusic),      sub: Math.round(g.totalMusic/g.total*100) + ' % z celku', cls:'c-music' },
+    { label:'Unikátní videa',   value: fmtNum(g.uniqueVideos),    sub:'různých URL',             cls:'c-yellow' },
+    { label:'Unikátní kanály',  value: fmtNum(g.uniqueChannels),  sub:'různých kanálů',          cls:'c-orange' },
+    { label:'Průměr / den',     value: g.avgPerDay.toFixed(1),    sub:'videí za den',            cls:'c-green' },
+  ].forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'stat-card ' + c.cls;
+    el.innerHTML = `<div class="stat-label">${c.label}</div><div class="stat-value">${c.value}</div><div class="stat-sub">${c.sub}</div>`;
+    sg.appendChild(el);
+  });
+
+  // shorts vs normal split
+  renderSplit(g);
+
+  // heatmap
+  renderHeatmap(g);
+
+  // weekday
+  renderWeekday(g.byWeekday);
+
+  // months
+  renderMonths(g.byMonth);
+
+  // tables
+  document.getElementById('totalChannelsBadge').textContent = fmtNum(g.uniqueChannels) + ' kanálů celkem';
+  rerenderChannels();
+  rerenderVideos();
+  rerenderDays();
+  renderHoursTable(g);
+
+  // streaks
+  renderStreaks(g);
+
+  // unrecognized
+  renderUnrecognized(g.unrecognized);
+  // time estimator
+  document.getElementById('sidebarTimeEst').style.display = '';
+  recalcTime();
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('results').style.display = '';
+}
+
+function renderSplit(g) {
+  const wrap = document.getElementById('splitBar');
+  const pN = g.total > 0 ? (g.totalNormal / g.total * 100) : 0;
+  const pS = g.total > 0 ? (g.totalShorts / g.total * 100) : 0;
+  const pM = g.total > 0 ? (g.totalMusic  / g.total * 100) : 0;
+  wrap.innerHTML = `
+    <div class="split-row">
+      <div class="split-dot s-normal"></div>
+      <div class="split-name">Normální videa</div>
+      <div class="split-count">${fmtNum(g.totalNormal)}</div>
+      <div class="split-track"><div class="split-fill s-normal" style="width:${pN.toFixed(1)}%"></div></div>
+      <div class="split-pct">${pN.toFixed(1)} %</div>
+    </div>
+    <div class="split-row">
+      <div class="split-dot s-shorts"></div>
+      <div class="split-name">YouTube Shorts</div>
+      <div class="split-count">${fmtNum(g.totalShorts)}</div>
+      <div class="split-track"><div class="split-fill s-shorts" style="width:${pS.toFixed(1)}%"></div></div>
+      <div class="split-pct">${pS.toFixed(1)} %</div>
+    </div>
+    <div class="split-row">
+      <div class="split-dot s-music"></div>
+      <div class="split-name">Hudba / Ambient</div>
+      <div class="split-count">${fmtNum(g.totalMusic)}</div>
+      <div class="split-track"><div class="split-fill s-music" style="width:${pM.toFixed(1)}%"></div></div>
+      <div class="split-pct">${pM.toFixed(1)} %</div>
+    </div>
+  `;
+}
+
+function renderHeatmap(g) {
+  const max = Math.max(...g.byHour);
+  const hm  = document.getElementById('heatmap');
+  const hl  = document.getElementById('heatmapLabels');
+  const leg = document.getElementById('heatmapLegend');
+  hm.innerHTML = ''; hl.innerHTML = '';
+
+  g.byHour.forEach((cnt, h) => {
+    const ratio = max > 0 ? cnt / max : 0;
+    const alpha = 0.06 + ratio * 0.94;
+    const cell  = document.createElement('div');
+    cell.className = 'heatmap-cell';
+    cell.style.background = `rgba(123,110,246,${alpha.toFixed(2)})`;
+    cell.setAttribute('data-tip', `${h}:00–${h+1}:00 · ${fmtNum(cnt)} videí (${fmtNum(g.byHourN[h])} norm. / ${fmtNum(g.byHourS[h])} shorts / ${fmtNum(g.byHourM[h])} hudba)`);
+    hm.appendChild(cell);
+    const lbl = document.createElement('span');
+    lbl.textContent = h % 3 === 0 ? h : '';
+    hl.appendChild(lbl);
+  });
+
+  // legend
+  leg.innerHTML = '<span>méně</span><div class="heatmap-legend-grad">' +
+    [0.06,0.28,0.50,0.72,0.94].map(a =>
+      `<div style="background:rgba(123,110,246,${a})"></div>`).join('') +
+    '</div><span>více</span>';
+}
+
+function renderWeekday(byWeekday) {
+  const max  = Math.max(...byWeekday);
+  const wrap = document.getElementById('weekdayBars');
+  wrap.innerHTML = '';
+  byWeekday.forEach((cnt, i) => {
+    const pct = max > 0 ? cnt / max * 100 : 0;
+    const col = document.createElement('div');
+    col.className = 'wd-col';
+    col.innerHTML = `
+      <div class="wd-bar-wrap"><div class="wd-bar" style="height:${pct.toFixed(1)}%"></div></div>
+      <div class="wd-label">${WD_SHORT[i]}</div>
+      <div class="wd-count">${fmtNum(cnt)}</div>
+    `;
+    wrap.appendChild(col);
+  });
+}
+
+function renderMonths(byMonth) {
+  const keys = Object.keys(byMonth).sort();
+  if (!keys.length) return;
+  const max  = Math.max(...Object.values(byMonth));
+  const wrap = document.getElementById('monthTimeline');
+  wrap.innerHTML = '';
+  keys.forEach(k => {
+    const [y, m] = k.split('-');
+    const label  = MONTHS_CS[parseInt(m,10)-1] + ' ' + y;
+    const cnt    = byMonth[k];
+    const pct    = max > 0 ? (cnt / max * 100) : 0;
+    const row    = document.createElement('div');
+    row.className = 'month-row';
+    row.innerHTML = `
+      <div class="month-name">${label}</div>
+      <div class="month-track"><div class="month-fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="month-count">${fmtNum(cnt)}</div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+function renderHoursTable(g) {
+  const max  = Math.max(...g.byHour);
+  const body = document.getElementById('hoursBody');
+  body.innerHTML = '';
+  g.byHour.forEach((cnt, h) => {
+    const pct = max > 0 ? (cnt / max * 100).toFixed(1) : 0;
+    const tr  = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-main" style="font-family:'DM Mono',monospace">${String(h).padStart(2,'0')}:00 – ${String(h+1).padStart(2,'0')}:00</td>
+      <td><span class="badge badge-purple">${fmtNum(cnt)}</span></td>
+      <td><span class="badge badge-gray">${fmtNum(g.byHourN[h])}</span></td>
+      <td><span class="badge badge-shorts">${fmtNum(g.byHourS[h])}</span></td>
+      <td><span class="badge badge-music">${fmtNum(g.byHourM[h])}</span></td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function rerenderChannels() {
+  if (!G) return;
+  const limit  = parseInt(document.getElementById('limitChannels').value);
+  const sort   = document.getElementById('sortChannels').value;
+  const filter = document.getElementById('filterChannelType').value;
+
+  let entries = Object.entries(G.byChannel);
+  if (filter === 'normal') entries = entries.filter(([n]) => (G.byChannelN[n]||0) > 0 && (G.byChannelS[n]||0) === 0 && (G.byChannelM[n]||0) === 0);
+  if (filter === 'shorts') entries = entries.filter(([n]) => (G.byChannelS[n]||0) > 0);
+  if (filter === 'music')  entries = entries.filter(([n]) => (G.byChannelM[n]||0) > 0);
+  if (sort === 'alpha') entries.sort((a,b) => a[0].localeCompare(b[0],'cs'));
+  else entries.sort((a,b) => b[1] - a[1]);
+  entries = entries.slice(0, limit);
+
+  const maxCnt = entries.length ? Math.max(...entries.map(e=>e[1])) : 1;
+  const body   = document.getElementById('channelBody');
+  body.innerHTML = '';
+  entries.forEach(([name, cnt], i) => {
+    const n   = G.byChannelN[name] || 0;
+    const s   = G.byChannelS[name] || 0;
+    const m   = G.byChannelM[name] || 0;
+    const pct = (cnt / maxCnt * 100).toFixed(1);
+    // dominant type badge for channel name
+    const domBadge = s > n && s > m
+      ? `<span class="badge badge-shorts" style="margin-left:.4rem;font-size:.63rem">Short</span>`
+      : m > n && m > s
+        ? `<span class="badge badge-music" style="margin-left:.4rem;font-size:.63rem">Hudba</span>`
+        : '';
+    const tr  = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="rank-cell">${i+1}</td>
+      <td class="td-main">${esc(name)}${domBadge}</td>
+      <td><span class="badge badge-purple">${fmtNum(cnt)}</span></td>
+      <td><span class="badge badge-gray">${fmtNum(n)}</span></td>
+      <td><span class="badge badge-shorts">${fmtNum(s)}</span></td>
+      <td><span class="badge badge-music">${fmtNum(m)}</span></td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+let videoPage = 1;
+
+function rerenderVideos() {
+  if (!G) return;
+  const pageSize = parseInt(document.getElementById('limitVideos').value);
+  const filter   = document.getElementById('filterVideoType').value;
+
+  // Build full filtered list (cached on G for performance)
+  let entries = Object.entries(G.byVideo).sort((a,b) => b[1]-a[1]).filter(e => e[1] > 1);
+  if (filter === 'normal') entries = entries.filter(([url]) => !G.videoMeta[url]?.short && !G.videoMeta[url]?.music);
+  if (filter === 'shorts') entries = entries.filter(([url]) =>  G.videoMeta[url]?.short);
+  if (filter === 'music')  entries = entries.filter(([url]) =>  G.videoMeta[url]?.music && !G.videoMeta[url]?.short);
+
+  const total    = entries.length;
+  const maxPages = Math.max(1, Math.ceil(total / pageSize));
+  if (videoPage > maxPages) videoPage = maxPages;
+  if (videoPage < 1) videoPage = 1;
+
+  const pageEntries = entries.slice((videoPage - 1) * pageSize, videoPage * pageSize);
+  const max  = entries.length ? Math.max(...entries.map(e=>e[1])) : 1;
+  const body = document.getElementById('videoBody');
+  body.innerHTML = '';
+
+  if (!pageEntries.length) {
+    body.innerHTML = `<tr><td colspan="6" style="color:var(--text3);font-family:'DM Mono',monospace;padding:1.1rem .85rem;font-size:.78rem">Žádné video se neopakuje (nebo neodpovídá filtru)</td></tr>`;
+  } else {
+    const startRank = (videoPage - 1) * pageSize;
+    pageEntries.forEach(([url, cnt], i) => {
+      const meta = G.videoMeta[url] || {};
+      const pct  = (cnt / max * 100).toFixed(1);
+      const typBadge = meta.short
+        ? `<span class="badge badge-shorts">Short</span>`
+        : meta.music
+          ? `<span class="badge badge-music">Hudba</span>`
+          : `<span class="badge badge-gray">Video</span>`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank-cell">${startRank + i + 1}</td>
+        <td>${typBadge}</td>
+        <td><a href="${esc(url)}" target="_blank" style="color:var(--accent2);text-decoration:none" title="${esc(meta.title||'')}">${esc(trunc(meta.title||url, 52))}</a></td>
+        <td style="color:var(--text3);font-size:.78rem">${esc(trunc(meta.channel||'',28))}</td>
+        <td><span class="badge badge-cyan">${fmtNum(cnt)}×</span></td>
+        <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill c-cyan" style="width:${pct}%"></div></div></td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  // Render pagination controls
+  const pgWrap = document.getElementById('videoPagination');
+  if (maxPages <= 1) { pgWrap.innerHTML = `<span class="pg-info">${total} výsledků</span>`; return; }
+
+  let pgHtml = `<span class="pg-info">${total} výsledků ·</span>`;
+  pgHtml += `<button class="pg-btn" onclick="videoPage--;rerenderVideos()" ${videoPage<=1?'disabled':''}>‹</button>`;
+
+  // Smart page number buttons: always show first, last, current ±1, with ellipsis
+  const pages = new Set([1, maxPages, videoPage, videoPage-1, videoPage+1].filter(p => p >= 1 && p <= maxPages));
+  const sorted = [...pages].sort((a,b) => a-b);
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) pgHtml += `<span class="pg-info">…</span>`;
+    pgHtml += `<button class="pg-btn${videoPage===p?' active':''}" onclick="videoPage=${p};rerenderVideos()">${p}</button>`;
+    prev = p;
+  });
+
+  pgHtml += `<button class="pg-btn" onclick="videoPage++;rerenderVideos()" ${videoPage>=maxPages?'disabled':''}>›</button>`;
+  pgWrap.innerHTML = pgHtml;
+}
+
+function rerenderDays() {
+  if (!G) return;
+  const limit   = parseInt(document.getElementById('limitDays').value);
+  const entries = Object.entries(G.byDay).sort((a,b) => b[1]-a[1]).slice(0, limit);
+  const max     = entries.length ? Math.max(...entries.map(e=>e[1])) : 1;
+  const body    = document.getElementById('daysBody');
+  body.innerHTML = '';
+
+  entries.forEach(([date, cnt], i) => {
+    const dt      = new Date(date + 'T12:00:00');
+    const shorts  = G.byDayShorts[date] || 0;
+    const pct     = (cnt / max * 100).toFixed(1);
+    // top channel that day
+    const dayCh   = G.byDayChannel[date] || {};
+    const topCh   = Object.entries(dayCh).sort((a,b)=>b[1]-a[1])[0];
+    const topChStr = topCh ? `${esc(trunc(topCh[0],24))} <span style="color:var(--text3);font-size:.72rem">(${topCh[1]}×)</span>` : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="rank-cell">${i+1}</td>
+      <td class="td-main" style="font-family:'DM Mono',monospace">${date}</td>
+      <td style="color:var(--text3);font-size:.8rem">${WD_SHORT[dt.getDay()]}</td>
+      <td><span class="badge badge-purple">${fmtNum(cnt)}</span></td>
+      <td><span class="badge badge-shorts">${fmtNum(shorts)}</span></td>
+      <td style="font-size:.82rem">${topChStr}</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill c-yellow" style="width:${pct}%"></div></div></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderStreaks(g) {
+  const sg = document.getElementById('streakGrid');
+  sg.innerHTML = '';
+  const activeDays = g.daysSorted.length;
+  [
+    { label:'Nejdelší série',  value: g.maxStreak + ' dní', sub: g.bestStart + ' → ' + g.bestEnd, cls:'c-green' },
+    { label:'Aktivní dny',     value: fmtNum(activeDays),   sub:'dní s alespoň 1 videem',          cls:'c-cyan' },
+    { label:'Pokrytí období',  value: g.spanDays > 0 ? Math.round(activeDays/g.spanDays*100) + ' %' : '—', sub:'aktivních dní ze všech', cls:'c-orange' },
+    { label:'Rekordní den',    value: (()=>{const e=Object.entries(g.byDay).sort((a,b)=>b[1]-a[1])[0];return e?fmtNum(e[1])+' videí':'—'})(),
+      sub:(()=>{const e=Object.entries(g.byDay).sort((a,b)=>b[1]-a[1])[0];return e?e[0]:'';})(), cls:'c-yellow' },
+  ].forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'stat-card ' + c.cls;
+    el.innerHTML = `<div class="stat-label">${c.label}</div><div class="stat-value" style="font-size:1.35rem">${c.value}</div><div class="stat-sub">${c.sub}</div>`;
+    sg.appendChild(el);
+  });
+}
+
+// ── unrecognized entries ──────────────────────────────────────────────────────
+function renderUnrecognized(list) {
+  const wrap  = document.getElementById('sidebarUnrecog');
+  const count = document.getElementById('unrecogCount');
+  const ul    = document.getElementById('unrecogList');
+  if (!list || list.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  count.textContent = list.length;
+  ul.innerHTML = '';
+  list.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'unrecog-item';
+    el.innerHTML = `<span class="ui-reason">${esc(item.reason)}</span>` +
+      `<span class="ui-title">${esc(item.title || '(bez názvu)')}</span>` +
+      (item.url ? `<br><span style="color:var(--text3);font-size:.6rem">${esc(item.url)}</span>` : '');
+    ul.appendChild(el);
+  });
+}
+
+function toggleUnrecog() {
+  const panel = document.getElementById('unrecogPanel');
+  const arrow = document.getElementById('unrecogArrow');
+  const open  = panel.classList.toggle('open');
+  arrow.textContent = open ? '▲' : '▼';
+}
+
+// ── time estimator ────────────────────────────────────────────────────────────
+function recalcTime() {
+  if (!G) return;
+  const minV      = parseFloat(document.getElementById('timeMin').value)    || 0;
+  const maxV      = parseFloat(document.getElementById('timeMax').value)     || 0;
+  const avgMusic  = parseFloat(document.getElementById('timeMusic').value)   || 0;
+  const avgShorts = parseFloat(document.getElementById('timeShorts').value)  || 0;
+  const useVideos = document.getElementById('togVideos').checked;
+  const useMusic  = document.getElementById('togMusic').checked;
+  const useShorts = document.getElementById('togShorts').checked;
+  const useDedup  = document.getElementById('togDedup').checked;
+
+  const avgNormal = (minV + maxV) / 2;
+  const videoCount = useDedup ? G.totalNormalDedup : G.totalNormal;
+
+  let totalMinutes = 0;
+  let breakdown = [];
+  if (useVideos) {
+    const m = videoCount * avgNormal;
+    totalMinutes += m;
+    const dedupNote = useDedup ? ` (dedup: ${fmtNum(videoCount)} unikátních)` : '';
+    breakdown.push(`videa ${fmtNum(videoCount)}× × ${avgNormal.toFixed(1)} min${dedupNote}`);
+  }
+  if (useMusic) {
+    const m = G.totalMusic * avgMusic;
+    totalMinutes += m;
+    breakdown.push(`hudba ${fmtNum(G.totalMusic)}× × ${avgMusic} min`);
+  }
+  if (useShorts) {
+    const m = G.totalShorts * avgShorts;
+    totalMinutes += m;
+    breakdown.push(`shorts ${fmtNum(G.totalShorts)}× × ${avgShorts} min`);
+  }
+
+  const totalHours  = totalMinutes / 60;
+  const totalDays   = totalHours / 24;
+  const totalMonths = totalDays / 30.44;
+  const totalYears  = totalDays / 365.25;
+
+  function fmtT(val, unit) {
+    return val.toLocaleString('cs-CZ', {maximumFractionDigits: 1}) + ' ' + unit;
+  }
+
+  const res = document.getElementById('timeEstResults');
+  res.innerHTML = [
+    { label: 'Hodin',  val: fmtT(totalHours, 'h'),   sub: fmtT(totalMinutes, 'min celkem') },
+    { label: 'Dní',    val: fmtT(totalDays, 'd'),     sub: 'ekvivalent dní' },
+    { label: 'Měsíců', val: fmtT(totalMonths, 'mo'), sub: 'ekvivalent měsíců' },
+    { label: 'Roků',   val: fmtT(totalYears, 'r'),   sub: 'ekvivalent roků' },
+  ].map(c => `
+    <div class="time-est-card">
+      <div class="tec-label">${c.label}</div>
+      <div class="tec-val">${c.val}</div>
+      <div class="tec-sub">${c.sub}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('timeEstNote').textContent = breakdown.length
+    ? 'Počítá se: ' + breakdown.join(' + ')
+    : 'Nic není vybráno.';
+}
+
+// ── file ───────────────────────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const sb = document.getElementById('statusBar');
+  sb.className = 'status-bar';
+  sb.textContent = '⏳ Parsování…';
+  const r = new FileReader();
+  r.onload = ev => {
+    _lastFileText = ev.target.result;
+    const g = parseData(_lastFileText);
+    if (g.error) { sb.className='status-bar err'; sb.textContent='✕ '+g.error; return; }
+    render(g);
+    sb.className = 'status-bar ok';
+    sb.textContent = '✓ Načteno — ' + fmtNum(g.total) + ' záznamů';
+  };
+  r.readAsText(file, 'utf-8');
+}
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => handleFile(e.target.files[0]));
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  G = null;
+  _lastFileText = null;
+  videoPage = 1;
+  document.getElementById('statusBar').className = 'status-bar';
+  document.getElementById('statusBar').textContent = 'Čeká na soubor…';
+  document.getElementById('headerBadge').textContent = 'Žádná data';
+  document.getElementById('sidebarMeta').style.display = 'none';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('emptyState').style.display = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('sidebarUnrecog').style.display = 'none';
+  document.getElementById('sidebarTimeEst').style.display = 'none';
+  document.getElementById('unrecogPanel').classList.remove('open');
+  document.getElementById('unrecogArrow').textContent = '▼';
+});
+
+// ── sidebar resize ─────────────────────────────────────────────────────────────
+(function(){
+  const handle=document.getElementById('resizeHandle'), MIN=230, MAX=560;
+  let dragging=false, startX=0, startW=0;
+  handle.addEventListener('mousedown', e => {
+    dragging=true; startX=e.clientX;
+    startW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'));
+    handle.classList.add('dragging');
+    document.body.style.cursor='col-resize'; document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const nw=Math.min(MAX,Math.max(MIN,startW+(e.clientX-startX)));
+    document.documentElement.style.setProperty('--sidebar-w',nw+'px');
+  });
+  document.addEventListener('mouseup', () => {
+    if(!dragging) return;
+    dragging=false; handle.classList.remove('dragging');
+    document.body.style.cursor=''; document.body.style.userSelect='';
+  });
+})();
+</script>
+
+<script id="youtube-history-localization">
+(() => {
+  'use strict';
+  const STORAGE_KEY = 'youtube_history_analyzer_language';
+  const EN = {". Jedno jméno na řádek, přesná shoda.":"One name per line, exact match.",". Jedno jméno na řádek. Podporuje regex (př.":"One name per line. Supports regex (eg.",". Jedno slovo/fráze na řádek. Jakákoliv shoda → hudba.":"One word / phrase per line. Any match → music.",". Videa detekovaná pouze přes":"Videos detected only via","(bez názvu)":"(without name)","(nikoli přes URL":"(not via URL","(výchozí: vypnuto)":"(default: off)","#shorts hashtagová":"# short hashtag","%\u003c/div> \u003c/div> \u003cdiv class=\"split-row\"> \u003cdiv class=\"split-dot s-music\">\u003c/div> \u003cdiv class=\"split-name\">Hudba / Ambient\u003c/div> \u003cdiv class=\"split-count\">":"= = sync, corrected by elderman = = @ elder _ man","%\u003c/span>\u003c/div> \u003cdiv>Hudba: \u003cspan class=\"mv\">":"♪ ♪","%\u003c/span>\u003c/div> \u003cdiv>Nejaktivnější h: \u003cspan class=\"mv\">":"= = sync, corrected by elderman = =","→ Soubor":"→ Select the file","→ Stáhnout data → Vybrat YouTube":"→ Choose JSON as the history format","↺ Výchozí":"↺ Defaults","\u003c/div>\u003cspan>více\u003c/span>":"There's more of it.","\u003cdiv class=\"split-row\"> \u003cdiv class=\"split-dot s-normal\">\u003c/div> \u003cdiv class=\"split-name\">Normální videa\u003c/div> \u003cdiv class=\"split-count\">":"= = sync, corrected by elderman = =","\u003cspan class=\"badge badge-gray\">Video\u003c/span>":"= = sync, corrected by elderman = =","\u003cspan class=\"badge badge-music\" style=\"margin-left:.4rem;font-size:.63rem\">Hudba\u003c/span>":"♪ Span class ♪","\u003cspan class=\"badge badge-music\">Hudba\u003c/span>":"♪ Span class ♪","\u003cspan>méně\u003c/span>\u003cdiv class=\"heatmap-legend-grad\">":"♪ Span less span ♪","⏳ Parsování…":"⏳ Parsing…","⚙ Nastavení detekce":"⚙ Detection Settings","⚠ Nerozpoznané záznamy":"⚠ Unrecognized Records","✓ Načteno —":"✓ Loaded —","✓ Uložit &amp; Znovu načíst":"✓ Save & Reload","✕ Vymazat data":"✕ Clear Data","🎵 Hudba":"🎵 Music","🎵 Hudební kanály":"🎵 Music Channels","🏷 Automatická detekce":"🏷 Automatic Detection","💾 Exportovat config":"💾 Export Config","📂 Importovat config":"📂 Import Config","📺 Shorts kanály":"📺 Shorts Channels","🔑 Klíčová slova":"🔑 Keywords","Aktivita podle dne v týdnu":"Activity by Day of Week","Aktivní dny":"Active days","aktivních dní ze všech":"active days in the range","Analýza sledovací historie · watch-history.json":"Analyze your YouTube watch history · watch-history.json","ani kanálový seznam) jsou méně spolehlivá — může jít o normální videa s tímto tagem. Toto nastavení je překlasifikuje zpět na videa.":"even the channel list) are less reliable - it can be normal videos with this tag. This setting reclassifies them back to videos.","bez ohledu na URL nebo název. Jedno jméno na řádek, přesná shoda (bez ohledu na velikost písmen).":"regardless of URL or name. One name per line, exact match (regardless of letters size).","Bře":"Mar","Celkem":"Total","Celkem sledováno":"Total Watched","Čeká na soubor…":"Waiting for a file…","Čt":"Thu","Čtvrtek":"Thursday","Čvc":"Jul","Čvn":"Jun","Deduplikovat videa":"Deduplicate Repeated Views","Den":"Day","dní":"days","Dní":"Days","dní s alespoň 1 videem":"days with at least one video","dní\u003c/span>\u003c/div> \u003cdiv>Průměr/den: \u003cspan class=\"mh\">":"Diameter / day","ekvivalent dní":"day equivalent","ekvivalent měsíců":"month equivalent","ekvivalent roků":"year equivalent","Hodina":"Hour","hudba":"music","Hudba":"Music","Hudba (průměr):":"Music (average):","Hudba / Ambient":"Music / Ambient","Hudba:":"Music:","hudba)":"music)","Chyba čtení JSON.":"Could not read the JSON file.","Chyba JSON:":"JSON Error:","Chybí subtitles/kanál":"Missing subtitles / channel","Jen hudba":"Music Only","Jen normální":"Regular Videos Only","Jen Shorts":"Shorts Only","Jména interpretů hledaná v":"Artists' names wanted in","JSON není pole záznamů.":"The JSON root is not an array of history records.","Kanál":"Channel","kanálů celkem":"channels total","Kanály jejichž videa jsou":"Channels whose videos are","Klíčová slova hledaná v":"Keywords searched in","Kvě":"May","méně":"less","Měsíců":"Months","min celkem":"minutes total","Název videa":"Video Title","názvu videa i kanálu":"name of video and channel","nebo klikni pro výběr souboru":"or click to choose a file","Neděle":"Sunday","Nejaktivnější dny":"Most Active Days","Nejaktivnější h:":"Most active hour:","Nejaktivnější hodiny":"Most Active Hours","Nejdelší série":"Longest Streak","Nejsledovanější videa (opakování)":"Most Rewatched Videos","Není URL videa":"No video URL","Neplatný config soubor.":"Invalid configuration file.","Nic není vybráno.":"Nothing selected.","Normální":"Normal","Normální videa":"Regular Videos","Obnovit výchozí nastavení?":"Restore default settings?","Odhad času sledování":"Estimated Watch Time","Pá":"Fri","Pátek":"Friday","Počet videí ↓":"View Count ↓","Počítá se:":"Counting:","Podíl":"Share","Pokrytí období":"Date Range Coverage","Pondělí":"Monday","pouze podle hashtagu #shorts v názvu":"only by hashtag # shorts in the name","Pravidla pro klasifikaci videí — změny se projeví po novém načtení souboru":"Rules for classifying videos - changes will manifest after reloading the file","Průměr / den":"Average / Day","Průměr/den:":"Average / day:","Přehled sledování":"Watch Overview","Překlasifikovat":"Reclassify","Přeskočí zhlédnutí stejného videa, pokud byla sledována méně než 2 minuty od sebe (pouze normální videa)":"They skip seeing the same video if they were watched less than 2 minutes apart (only normal videos)","Přetáhni watch-history.json":"Drop watch-history.json here","Rekordní den":"Record Day","Roků":"Years","různých kanálů":"different channels","různých URL":"different URLs","Říj":"Oct","Série sledování (streak)":"Watch Streaks","Seřadit:":"Sort:","Shorts (průměr):":"Shorts (average):","Shorts vs. normální videa":"Shorts vs. Regular Videos","Sledování po měsících":"Monthly Watch Activity","Středa":"Wednesday","Top kanál toho dne":"Top Channel That Day","Top kanály":"Top Channels","Unikátní kanály":"Unique Channels","Unikátní videa":"Unique Videos","unikátních)":"unique)","Únr":"Feb","Út":"Tue","Úterý":"Tuesday","v titulku budou hodnocena jako normální nebo hudba.":"In the headline, they'll be judged normal or music.","více":"more","videa":"videos","Videa":"Videos","Videa — max:":"Videos — max:","Videa — min:":"Videos — min:","Videa detekovaná":"Videos detected","videa zpět na normální / hudbu":"videos back to normal / music","videí":"videos","Videí":"Videos","videí (":"videos (","videí za den":"videos per day","Vše":"All","všechna videa":"all videos","Výchozí:":"Default:","výsledků ·\u003c/span>":"results","výsledků\u003c/span>":"Outcome","vždy označena jako Hudba":"always marked as Music","vždy označena jako Shorts":"always marked as Shorts","YouTube → Nastavení → Data Google":"Google Takeout → Select YouTube and YouTube Music","zapnuto":"on","Zář":"Sep","záznamů":"records","Zhlédnutí":"Views","Zrušit":"Cancel","Žádná data":"No data","Žádné video se neopakuje (nebo neodpovídá filtru)":"No repeated video matches the current filter","🎤 Interpreti":"🎤 Artists","Import souboru":"Import File","Souhrn":"Summary","Nahraj svou historii":"Load Your History","Aktivita podle hodiny dne":"Activity by Hour of Day","Led":"Jan","Dub":"Apr","Srp":"Aug","Lis":"Nov","Pro":"Dec","Po":"Mon","St":"Wed","So":"Sat","Ne":"Sun","Sobota":"Saturday","Od:":"From:","Do:":"To:","Rozsah:":"Range:","Interpreti":"Artists","Výsledků":"Results","Zobrazit":"Show"};
+  const ATTRS = ['data-tip', 'placeholder', 'title', 'aria-label'];
+  const originalText = new WeakMap();
+  const originalAttrs = new WeakMap();
+  let language = localStorage.getItem(STORAGE_KEY) === 'cs' ? 'cs' : 'en';
+
+  const keys = Object.keys(EN)
+    .filter(key => key.length > 1 && !/[<>]/.test(key))
+    .sort((a, b) => b.length - a.length);
+  const escaped = keys.map(key => key.replace(/[^A-Za-z0-9_]/g, char => String.fromCharCode(92) + char));
+  const phrasePattern = escaped.length ? new RegExp(escaped.join('|'), 'g') : null;
+
+  function english(text) {
+    const compact = text.replace(/\s+/g, ' ').trim();
+    if (!compact) return text;
+    const normalized = compact
+      .replace('✓ Uložit & Znovu načíst', '✓ Save & Reload')
+      .replace(/(\d+) výsledků/g, '$1 results');
+    const translated = EN[compact]
+      || (phrasePattern ? normalized.replace(phrasePattern, match => EN[match] || match) : normalized);
+    const leading = /^\s/.test(text) ? ' ' : '';
+    const trailing = /\s$/.test(text) ? ' ' : '';
+    return leading + translated + trailing;
+  }
+
+  function localizeText(node) {
+    if (!originalText.has(node)) originalText.set(node, node.nodeValue);
+    const source = originalText.get(node);
+    const next = language === 'en' ? english(source) : source;
+    if (node.nodeValue !== next) node.nodeValue = next;
+  }
+
+  function localizeElement(element) {
+    if (element.tagName === 'OPTION' && !element.hasAttribute('value')) {
+      element.setAttribute('value', element.textContent.trim());
+    }
+    let stored = originalAttrs.get(element);
+    if (!stored) {
+      stored = {};
+      for (const attr of ATTRS) if (element.hasAttribute(attr)) stored[attr] = element.getAttribute(attr);
+      originalAttrs.set(element, stored);
+    }
+    for (const [attr, source] of Object.entries(stored)) {
+      const next = language === 'en' ? english(source) : source;
+      if (element.getAttribute(attr) !== next) element.setAttribute(attr, next);
+    }
+  }
+
+  function localizeTree(root) {
+    if (root.nodeType === Node.ELEMENT_NODE) localizeElement(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeType === Node.ELEMENT_NODE) localizeElement(node);
+      else if (!node.parentElement?.closest('script,style')) localizeText(node);
+    }
+  }
+
+  function updateButton() {
+    const button = document.getElementById('btn-language');
+    if (!button) return;
+    const label = language === 'en' ? 'CS' : 'EN';
+    const tip = language === 'en' ? 'Switch to Czech' : 'Přepnout do angličtiny';
+    if (button.textContent !== label) button.textContent = label;
+    if (button.title !== tip) button.title = tip;
+    if (button.getAttribute('aria-label') !== tip) button.setAttribute('aria-label', tip);
+  }
+
+  function applyLanguage(next) {
+    language = next === 'cs' ? 'cs' : 'en';
+    localStorage.setItem(STORAGE_KEY, language);
+    document.documentElement.lang = language;
+    localizeTree(document.body);
+    updateButton();
+  }
+
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      if (record.type === 'characterData') localizeText(record.target);
+      for (const node of record.addedNodes) {
+        if (node.nodeType === Node.TEXT_NODE) localizeText(node);
+        else if (node.nodeType === Node.ELEMENT_NODE) localizeTree(node);
+      }
+    }
+    updateButton();
+  });
+
+  const nativeAlert = window.alert.bind(window);
+  const nativeConfirm = window.confirm.bind(window);
+  window.alert = message => nativeAlert(language === 'en' ? english(String(message)) : message);
+  window.confirm = message => nativeConfirm(language === 'en' ? english(String(message)) : message);
+
+  document.getElementById('btn-language')?.addEventListener('click', () => {
+    applyLanguage(language === 'en' ? 'cs' : 'en');
+  });
+  applyLanguage(language);
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  window.YouTubeHistoryLanguage = { current: () => language, set: applyLanguage };
+})();
+</script>
+
+</body>
+<!-- Created by FajkPes with assistance from ChatGPT Codex and Claude Code. -->
+</html>
