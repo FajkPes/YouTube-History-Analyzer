@@ -1,0 +1,76 @@
+# YouTube History Analyzer
+
+A private, offline dashboard for exploring your personal YouTube watch history exported through Google Takeout.
+
+I created this project because the raw `watch-history.json` file is difficult to understand on its own. The analyzer turns it into a clear overview of viewing habits while keeping the data on your computer.
+
+## Highlights
+
+- Total and unique videos and channels
+- Regular videos, Shorts, and music breakdown
+- Activity by hour, weekday, and month
+- Most watched channels and repeated videos
+- Active-day coverage and watch streaks
+- Configurable estimated watch time
+- Custom Shorts and music classification rules
+- Import and export of classification settings
+- English interface by default, with an optional Czech language switch
+- Fully local processing: the selected history file is not uploaded anywhere
+
+## Requirements
+
+- Windows, macOS, or Linux
+- A modern web browser
+- Your extracted YouTube `watch-history.json` file
+
+No installation, Node.js, server, internet connection, or third-party dependency is required.
+
+## Get your YouTube history
+
+1. Open [Google Takeout](https://takeout.google.com/).
+2. Deselect everything, then select **YouTube and YouTube Music**.
+3. Include your history data and create the export. Choose JSON when the export options offer a format choice.
+4. Download and extract the Takeout archive.
+5. Locate `watch-history.json`, usually under `YouTube and YouTube Music/history/`.
+
+Google may change the exact Takeout labels or folder layout. See the [official Google Takeout help](https://support.google.com/accounts/answer/3024190?hl=en) if the current interface differs.
+
+## How to use
+
+1. Download and extract the release ZIP.
+2. Run `Start YouTube History Analyzer.bat`, or open `index.html` directly.
+3. Drop `watch-history.json` onto the import area, or click the area and choose the file.
+4. Review the dashboard and adjust its date range, filters, or sorting.
+5. Open **Detection Settings** to tune Shorts, music, artists, and keyword classification.
+
+The app accepts the extracted JSON file, not the complete Takeout ZIP or TGZ archive.
+
+## Classification settings
+
+The history export does not reliably label every Shorts or music entry. The analyzer therefore combines URL patterns with configurable channel, artist, and keyword lists.
+
+`example-classification-config.json` is an optional starting point:
+
+1. Open **Detection Settings**.
+2. Select **Import Config**.
+3. Choose `example-classification-config.json`.
+4. Review and customize the lists for your own history.
+5. Reload your history file after saving changes.
+
+You can export your adjusted configuration from the same window. Settings are also saved locally in your browser.
+
+## About watch-time estimates
+
+Google's watch-history records provide timestamps, titles, URLs, and usually channel information, but not the exact amount of time you watched each item. The displayed watch time is therefore an estimate based on the configurable average duration for regular videos, Shorts, and music. It should be treated as a useful trend, not an exact measurement.
+
+## Privacy
+
+All parsing and statistics run inside your browser. The application contains no analytics, uploads, external scripts, or network requests. Keep your personal Takeout archive private and do not publish it with the project.
+
+## Version
+
+Release `v20.0` is based on source revision 20 and adds an English-default interface, optional Czech localization, offline packaging, and release documentation.
+
+## Credits
+
+Created by FajkPes with assistance from ChatGPT Codex and Claude Code.
