@@ -50,3 +50,8 @@ The app accepts the extracted JSON file, not the complete Takeout ZIP or TGZ arc
 All parsing and statistics run inside your browser. The application contains no analytics, uploads, external scripts, or network requests. Keep your personal Takeout archive private and do not publish it with the project.
 
 [Detailed documentation](README-DETAILS.md) · [All releases](https://github.com/FajkPes/YouTube-History-Analyzer/releases)
+
+## Credits
+
+**Idea, concept and design:** FajkPes  
+**Coding:** ChatGPT Codex, Claude and Google Antigravity
