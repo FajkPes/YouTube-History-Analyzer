@@ -51,6 +51,24 @@ All parsing and statistics run inside your browser. The application contains no 
 
 [Detailed documentation](README-DETAILS.md) · [All releases](https://github.com/FajkPes/YouTube-History-Analyzer/releases)
 
+## Classification settings
+
+The history export does not reliably label every Shorts or music entry. The analyzer therefore combines URL patterns with configurable channel, artist, and keyword lists.
+
+`example-classification-config.json` is an optional starting point:
+
+1. Open **Detection Settings**.
+2. Select **Import Config**.
+3. Choose `example-classification-config.json`.
+4. Review and customize the lists for your own history.
+5. Reload your history file after saving changes.
+
+You can export your adjusted configuration from the same window. Settings are also saved locally in your browser.
+
+## About watch-time estimates
+
+Google's watch-history records provide timestamps, titles, URLs, and usually channel information, but not the exact amount of time you watched each item. The displayed watch time is therefore an estimate based on the configurable average duration for regular videos, Shorts, and music. It should be treated as a useful trend, not an exact measurement.
+
 ## Credits
 
 **Idea, concept and design:** FajkPes  
